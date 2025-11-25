@@ -63,48 +63,27 @@ RUN set -ex \
 # ============================================================================
 FROM build-essential AS cuda
 
-ARG CUDA_VERSION_MAJOR=12
-ARG CUDA_VERSION_MINOR=9
-ARG CUDA_VERSION_PATCH=1
-ARG CUDA_VERSION="${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}.${CUDA_VERSION_PATCH}"
-ARG CUDA_ARCH="tegra-aarch64"
-ARG CUDA_ARCH_LIST="87"
-ARG DISTRO="ubuntu2204"
-ARG CUDA_PACKAGES="cuda-toolkit-*"
+ARG CUDA_URL=https://developer.download.nvidia.com/compute/cuda/12.9.1/local_installers/cuda-tegra-repo-ubuntu2204-12-9-local_12.9.1-1_arm64.deb \
+    CUDA_DEB=cuda-tegra-repo-ubuntu2204-12-9-local \
+    CUDA_PACKAGES="cuda-toolkit*" \
+    CUDA_ARCH_LIST=87 \
+    CUDA_ARCH=tegra-aarch64 \
+    CUDA_INSTALLED_VERSION=129 \
+    IS_SBSA=False \
+    DISTRO=ubuntu2204
 
-# Download and install CUDA
-RUN set -ex \
-    && mkdir -p /tmp/cuda \
-    && cd /tmp/cuda \
-    && CUDA_DEB="cuda-tegra-repo-${DISTRO}-${CUDA_VERSION_MAJOR}-${CUDA_VERSION_MINOR}-local" \
-    && CUDA_URL="https://developer.download.nvidia.com/compute/cuda/${CUDA_VERSION}/local_installers/${CUDA_DEB}_${CUDA_VERSION}-1_arm64.deb" \
-    && echo "Downloading CUDA ${CUDA_VERSION} for ${CUDA_ARCH}" \
-    && wget $WGET_FLAGS \
-        https://developer.download.nvidia.com/compute/cuda/repos/${DISTRO}/arm64/cuda-${DISTRO}.pin \
-        -O /etc/apt/preferences.d/cuda-repository-pin-600 \
-    && wget $WGET_FLAGS ${CUDA_URL} \
-    && dpkg -i *.deb \
-    && cp /var/cuda-*-local/cuda-*-keyring.gpg /usr/share/keyrings/ \
-    && if [ -f /var/cuda-tegra-repo-ubuntu*-local/cuda-compat-*.deb ]; then \
-         ar x /var/cuda-tegra-repo-ubuntu*-local/cuda-compat-*.deb; \
-         tar xvf data.tar.xz -C /; \
-       fi \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends ${CUDA_PACKAGES} \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean \
-    && dpkg --list | grep cuda \
-    && dpkg -P ${CUDA_DEB} || true \
-    && rm -rf /tmp/cuda
+COPY scripts/install_cuda.sh /tmp/cuda/install.sh
+RUN /tmp/cuda/install.sh
 
-ENV CUDA_HOME="/usr/local/cuda" \
-    NVCC_PATH="/usr/local/cuda/bin/nvcc"
+ENV CUDA_HOME="/usr/local/cuda"
+ENV NVCC_PATH="$CUDA_HOME/bin/nvcc"
 
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=all \
     CUDAARCHS=${CUDA_ARCH_LIST} \
     CUDA_ARCHITECTURES=${CUDA_ARCH_LIST} \
     CUDA_INSTALLED_VERSION=${CUDA_VERSION} \
+    CUDA_HOME="/usr/local/cuda" \
     CUDNN_LIB_PATH="/usr/lib/aarch64-linux-gnu" \
     CUDNN_LIB_INCLUDE_PATH="/usr/include" \
     CMAKE_CUDA_COMPILER=${NVCC_PATH} \
@@ -113,10 +92,13 @@ ENV NVIDIA_VISIBLE_DEVICES=all \
     TORCH_NVCC_FLAGS="-Xfatbin -compress-all" \
     CUDA_BIN_PATH="${CUDA_HOME}/bin" \
     CUDA_TOOLKIT_ROOT_DIR="${CUDA_HOME}" \
-    PATH="${PATH}:${CUDA_HOME}/bin" \
-    LD_LIBRARY_PATH="${CUDA_HOME}/compat:${CUDA_HOME}/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+    LD_LIBRARY_PATH="${CUDA_HOME}/compat:${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}" \
+    LDFLAGS="-L/usr/local/cuda/lib64 ${LDFLAGS}" \
+    DEBIAN_FRONTEND=noninteractive
+
+ENV PATH="${PATH}:${CUDA_HOME}/bin" \
     LIBRARY_PATH=${LIBRARY_PATH:+${LIBRARY_PATH}:}/usr/local/cuda/lib64/stubs \
-    LDFLAGS="${LDFLAGS:+${LDFLAGS} }-L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs -Wl,-rpath,/usr/local/cuda/lib64" \
+    LDFLAGS="${LDFLAGS:+${LDFLAGS} }-L/usr/local/cuda/lib64/stubs -Wl,-rpath,/usr/local/cuda/lib64" \
     CPLUS_INCLUDE_PATH=/usr/local/cuda/include/cccl${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}} \
     C_INCLUDE_PATH=/usr/local/cuda/include/cccl${C_INCLUDE_PATH:+:${C_INCLUDE_PATH}}
 
@@ -125,26 +107,17 @@ WORKDIR /
 # ============================================================================
 # LAYER 3: cuDNN (part of cudastack)
 # Installs cuDNN for deep learning acceleration
-# Note: This is a simplified version - full cudastack includes TensorRT, NCCL, etc.
 # ============================================================================
 FROM cuda AS cudastack
 
-# For a complete standalone image, you would need to install:
-# - cuDNN
-# - TensorRT (optional, large)
-# - NCCL (for multi-GPU)
-# Since ollama primarily needs cuDNN, we focus on that
-# In a real Jetson environment, these come pre-installed in JetPack
+ARG CUDNN_VERSION=9.15.0 \
+    CUDNN_URL=https://developer.download.nvidia.com/compute/cudnn/9.15.0/local_installers/cudnn-local-tegra-repo-ubuntu2204-9.15.0_1.0-1_arm64.deb \
+    CUDNN_DEB=cudnn-local-tegra-repo-ubuntu2204-9.15.0 \
+    CUDNN_PACKAGES="libcudnn9-cuda-12 libcudnn9-dev-cuda-12 libcudnn9-samples" \
+    DISTRO=ubuntu2204
 
-# Note: cuDNN installation requires downloading from NVIDIA
-# For a standalone build, you would typically:
-# 1. Download cuDNN deb files from NVIDIA developer site
-# 2. Install via dpkg
-# This is commented out as it requires authentication:
-# RUN wget <CUDNN_URL> && dpkg -i cudnn*.deb
-
-# For now, we assume the base has cuDNN or skip this for basic ollama functionality
-RUN echo "cuDNN installation would go here - requires NVIDIA developer credentials"
+COPY scripts/install_cudnn.sh /tmp/cudnn/install.sh
+RUN /tmp/cudnn/install.sh
 
 # ============================================================================
 # LAYER 4: CMake
@@ -302,7 +275,6 @@ ENV OLLAMA_VERSION=${OLLAMA_VERSION} \
     OLLAMA_LOGS=/data/logs/ollama.log \
     OLLAMA_MODELS=/data/models/ollama/models \
     OLLAMA_HOME=/opt/ollama \
-    IS_SBSA=${IS_SBSA} \
     CUDA_VERSION_MAJOR=${CUDA_VERSION_MAJOR} \
     JETPACK_VERSION_MAJOR=${JETPACK_VERSION_MAJOR}
 
