@@ -14,9 +14,11 @@ printf "OLLAMA_MODELS ${OLLAMA_MODELS}\n\n"
 
 if [[ ! -z "${OLLAMA_MODEL}" ]]; then
   printf "Loading model ${OLLAMA_MODEL} ...\n"
-  /bin/bash -c "ollama pull ${OLLAMA_MODEL}"
+  /bin/bash -c "sleep 5 && ollama run ${OLLAMA_MODEL}" &
 fi
 
 /bin/bash -c "OLLAMA_LLM_LIBRARY=cuda_v${CUDA_VERSION_MAJOR} ollama serve &> $OLLAMA_LOGS" 2>&1 &
 
-printf "\nollama server is now started\n\n"
+if [[ -z "${OLLAMA_MODEL}" ]]; then
+  printf "\nollama server is now started, and you can run commands here like 'ollama run gemma3'\n\n"
+fi
