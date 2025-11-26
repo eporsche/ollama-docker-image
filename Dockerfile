@@ -41,9 +41,9 @@ RUN set -e \
     && cd / && rm -rf /tmp/ollama
 
 # Install Python ollama package
-RUN set -e \
-    && . /opt/venv/bin/activate \
-    && uv pip install ollama
+# RUN set -e \
+#     && . /opt/venv/bin/activate \
+#     && uv pip install ollama
 
 # Create symbolic links
 RUN ln -s /usr/local/bin/ollama /usr/bin/ollama || true \
