@@ -17,4 +17,4 @@ if [[ ! -z "${OLLAMA_MODEL}" ]]; then
   /bin/bash -c "sleep 5 && ollama pull ${OLLAMA_MODEL}" &
 fi
 
-/bin/bash -c "OLLAMA_LLM_LIBRARY=cuda_v${CUDA_VERSION_MAJOR} ollama serve &> $OLLAMA_LOGS" 2>&1
+/bin/bash -c "ollama serve &> $OLLAMA_LOGS" 2>&1

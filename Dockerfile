@@ -2,7 +2,6 @@ FROM nvcr.io/nvidia/l4t-cuda:12.2.2-devel-arm64-ubuntu22.04 AS base
 
 ARG OLLAMA_VERSION=0.13.0
 ARG JETPACK_VERSION_MAJOR=6
-ARG IS_SBSA=False
 ARG CUDA_VERSION_MAJOR=12
 
 ENV OLLAMA_VERSION=${OLLAMA_VERSION} \
@@ -39,11 +38,6 @@ RUN set -e \
     && tar -xzvf ollama-linux-arm64-jetpack${JETPACK_VERSION_MAJOR}.tgz -C /usr/local \
     && rm ollama-linux-arm64-jetpack${JETPACK_VERSION_MAJOR}.tgz \
     && cd / && rm -rf /tmp/ollama
-
-# Install Python ollama package
-# RUN set -e \
-#     && . /opt/venv/bin/activate \
-#     && uv pip install ollama
 
 # Create symbolic links
 RUN ln -s /usr/local/bin/ollama /usr/bin/ollama || true \
