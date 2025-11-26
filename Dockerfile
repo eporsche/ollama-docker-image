@@ -17,6 +17,9 @@ ENV OLLAMA_VERSION=${OLLAMA_VERSION} \
 COPY start_ollama /start_ollama
 RUN chmod +x /start_ollama
 
+# Install wget and other required tools
+RUN apt-get update && apt-get install -y wget ca-certificates && rm -rf /var/lib/apt/lists/*
+
 # Set environment variable for ollama release URL
 ENV OLLAMA_RELEASE_URL="https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}"
 
